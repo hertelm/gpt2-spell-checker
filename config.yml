@@ -21,3 +21,5 @@ prune_candidates: True
 prune_beams: True
 pruning_delta: 5
 verbose: True
+input_file: None
+output_file: None

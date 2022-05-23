@@ -1,6 +1,8 @@
 import argparse
 
 import yaml
+import time
+from tqdm import tqdm
 
 from src.gpt2_spell_checker import GPT2SpellChecker
 
@@ -31,9 +33,36 @@ def main(args):
                                      prune_beams=config["prune_beams"],
                                      pruning_delta=config["pruning_delta"])
 
-    while True:
-        query = input("> ")
-        result = spell_checker.correct(query, verbose=config["verbose"])
+    if config["input_file"] is None:
+        while True:
+            query = input("> ")
+            result = spell_checker.correct(query, verbose=config["verbose"])
+            print(result)
+
+    else:
+        with open(config["input_file"]) as in_file:
+            sequences = in_file.read().splitlines()
+        if config["output_file"] is not None:
+            out_file = open(config["output_file"], "w")
+        else:
+            out_file = None
+        runtime = 0
+        for sequence in tqdm(sequences):
+            is_upper = sequence.isupper()
+            if is_upper:
+                sequence = sequence.lower()
+            start_time = time.time()
+            result = spell_checker.correct(sequence, verbose=config["verbose"])
+            runtime += time.time() - start_time
+            if is_upper:
+                result = result.upper()
+            if out_file is not None:
+                out_file.write(result)
+                out_file.write("\n")
+        if out_file is not None:
+            out_file.write(str(runtime))
+            out_file.write("\n")
+            out_file.close()
 
 
 if __name__ == "__main__":
