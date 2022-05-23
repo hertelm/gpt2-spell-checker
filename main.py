@@ -1,16 +1,18 @@
+import argparse
+
 import yaml
 
 from src.gpt2_spell_checker import GPT2SpellChecker
 
 
-def read_config():
-    with open("config.yml") as ymlfile:
+def read_config(config_file: str):
+    with open(config_file) as ymlfile:
         cfg = yaml.safe_load(ymlfile)
     return cfg
 
 
-if __name__ == "__main__":
-    config = read_config()
+def main(args):
+    config = read_config(args.config_file)
     print(config)
 
     spell_checker = GPT2SpellChecker(model=config["model"],
@@ -32,3 +34,10 @@ if __name__ == "__main__":
     while True:
         query = input("> ")
         result = spell_checker.correct(query, verbose=config["verbose"])
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("config_file", type=str, default="config.yml")
+    args = parser.parse_args()
+    main(args)
