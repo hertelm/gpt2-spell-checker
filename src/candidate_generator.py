@@ -1,4 +1,4 @@
-from typing import Set, Dict, Tuple, List
+from typing import Set, Dict, Tuple, List, Optional
 
 from itertools import combinations
 from tqdm import tqdm
@@ -56,7 +56,9 @@ class CandidateGenerator:
     def __init__(self,
                  n_words: int,
                  max_ed: int,
-                 min_len_per_ed: Dict[int, int]):
+                 min_len_per_ed: Dict[int, int],
+                 allow_space_edits: bool,
+                 max_ed_splits: int):
         self.n_words = n_words
         self.words = set()
         self._read_words()
@@ -65,6 +67,8 @@ class CandidateGenerator:
         self.min_len_per_ed = min_len_per_ed
         self.stump_index = {}
         self._create_stump_index()
+        self.allow_space_edits = allow_space_edits
+        self.max_ed_splits = max_ed_splits
 
     def _read_words(self):
         for line in open("data/word_frequencies.txt"):
@@ -111,8 +115,12 @@ class CandidateGenerator:
                     candidates.update(self.stump_index[stump])
         return candidates
 
-    def _filter_candidates(self, word: str, candidates: Set[str], assume_first_char_correct: bool) \
-            -> List[Tuple[str, int]]:
+    def _filter_candidates(self,
+                           word: str,
+                           candidates: Set[str],
+                           max_ed: int,
+                           assume_first_char_correct: bool) \
+            -> List[Tuple[str, int, bool]]:
         filtered_candidates = []
         for candidate in candidates:
             if word == candidate:
@@ -120,13 +128,51 @@ class CandidateGenerator:
             if assume_first_char_correct and word[0].lower() != candidate[0].lower():
                 continue
             ed = edit_distance(word, candidate, transpositions=True)
-            if ed <= self.max_ed and len(candidate) >= self.min_len_per_ed[ed]:
-                filtered_candidates.append((candidate, ed))
+            if ed <= max_ed and len(candidate) >= self.min_len_per_ed[ed]:
+                filtered_candidates.append((candidate, ed, False))
         return filtered_candidates
 
-    def get_candidates(self, word, assume_first_char_correct=False) -> List[Tuple[str, int]]:
+    def _get_candidate_words(self, word: str, max_ed: int, assume_first_char_correct=False) \
+            -> List[Tuple[str, int, bool]]:
         candidates = self._query_stump_index(word)
-        candidates = self._filter_candidates(word, candidates, assume_first_char_correct)
+        candidates = self._filter_candidates(word, candidates, max_ed, assume_first_char_correct)
+        return candidates
+
+    def _get_split_candidates(self, token: str, max_ed: int) -> List[Tuple[str, int, bool]]:
+        split_candidates = []
+        for i in range(1, len(token)):
+            left = token[:i]
+            left_candidates = []
+            if self.is_word(left):
+                left_candidates.append((left, 0, False))
+            left_candidates.extend(self._get_candidate_words(left, max_ed=max_ed - 1))
+            right = token[i:]
+            right_candidates = []
+            if self.is_word(right):
+                right_candidates.append((right, 0, False))
+            right_candidates.extend(self._get_candidate_words(right, max_ed=max_ed - 1))
+            for c_left, ed1, _ in left_candidates:
+                for c_right, ed2, _ in right_candidates:
+                    if ed1 + ed2 + 1 <= max_ed:
+                        split_candidates.append((c_left + " " + c_right, ed1 + ed2 + 1, False))
+        return split_candidates
+
+    def _get_merge_candidates(self, token1: str, token2: str) -> List[Tuple[str, int, bool]]:
+        merged = token1 + token2
+        merge_candidates = []
+        if self.is_word(merged):
+            merge_candidates.append((merged, 1, True))
+        candidates = self._get_candidate_words(merged, max_ed=self.max_ed - 1)
+        for candidate, ed, _ in candidates:
+            merge_candidates.append((candidate, ed + 1, True))
+        return merge_candidates
+
+    def get_candidates(self, token: str, next_token: Optional[str]):
+        candidates = self._get_candidate_words(token, max_ed=self.max_ed)
+        if self.allow_space_edits:
+            candidates.extend(self._get_split_candidates(token, max_ed=self.max_ed_splits))
+            if next_token is not None and next_token.isalpha():
+                candidates.extend(self._get_merge_candidates(token, next_token))
         return candidates
 
     def is_word(self, word):

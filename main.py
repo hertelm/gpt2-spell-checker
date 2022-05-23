@@ -23,6 +23,8 @@ if __name__ == "__main__":
                                      correct_real_words=config["correct_real_words"],
                                      real_word_penalty=config["real_word_penalty"],
                                      first_char_penalty=config["first_char_penalty"],
+                                     correct_spaces=config["correct_spaces"],
+                                     max_ed_splits=config["maximum_edit_distance_splits"],
                                      prune_candidates=config["prune_candidates"],
                                      prune_beams=config["prune_beams"],
                                      pruning_delta=config["pruning_delta"])

@@ -36,6 +36,8 @@ class GPT2SpellChecker:
                  correct_real_words: bool,
                  real_word_penalty: float,
                  first_char_penalty: float,
+                 correct_spaces: bool,
+                 max_ed_splits: int,
                  prune_candidates: bool,
                  prune_beams: bool,
                  pruning_delta: float):
@@ -43,7 +45,9 @@ class GPT2SpellChecker:
         self.tokenizer = load_tokenizer(tokenizer)
         self.candidate_generator = CandidateGenerator(n_words=n_words,
                                                       max_ed=max_ed,
-                                                      min_len_per_ed=min_len_per_ed)
+                                                      min_len_per_ed=min_len_per_ed,
+                                                      allow_space_edits=correct_spaces,
+                                                      max_ed_splits=max_ed_splits)
         self.beam_width = beam_width
         self.penalties = penalties
         self.correct_real_words = correct_real_words
@@ -70,7 +74,8 @@ class GPT2SpellChecker:
             "score": 0,
             "probs": torch.softmax(res.logits[0][0], dim=0),
             "past_key_values": res.past_key_values,
-            "text": ""
+            "text": "",
+            "delay": 0,
         }
         return beam
 
@@ -90,12 +95,12 @@ class GPT2SpellChecker:
             encodings.append(encoding)
         return encodings
 
-    def _get_beam_search_candidates(self, token, is_space):
-        candidates = [(token, 0)]
+    def _get_beam_search_candidates(self, token, next_token, is_space):
+        candidates = [(token, 0, False)]
         if (not self.candidate_generator.is_word(token) or self.correct_real_words) and token[0].isalpha():
-            candidates.extend(self.candidate_generator.get_candidates(token))
+            candidates.extend(self.candidate_generator.get_candidates(token, next_token))
         if is_space:
-            candidates = [(" " + candidate, ed) for candidate, ed in candidates]
+            candidates = [(" " + candidate, ed, is_delayed) for candidate, ed, is_delayed in candidates]
         return candidates
 
     def _get_best_single_token_candidate_score(self, beams, token, candidates, encoded_candidates):
@@ -123,10 +128,21 @@ class GPT2SpellChecker:
                 score += self.first_char_penalty
         return score
 
-    def _beam_search_step(self, beams, token, is_space, verbose):
+    def _select_top_beams(self, beams):
+        delayed_beams = []
+        active_beams = []
+        for beam in beams:
+            if beam["delay"] > 0:
+                delayed_beams.append(beam)
+            else:
+                active_beams.append(beam)
+        active_beams = sorted(active_beams, key=lambda beam: beam["score"])
+        return active_beams[:self.beam_width] + delayed_beams[:self.beam_width]
+
+    def _beam_search_step(self, beams, token, next_token, is_space, verbose):
         n_model_calls = 0
         cand_start_time = time.time()
-        candidates = self._get_beam_search_candidates(token, is_space)
+        candidates = self._get_beam_search_candidates(token, next_token, is_space)
         cand_runtime = time.time() - cand_start_time
         self.total_candidate_runtime += cand_runtime
         if verbose:
@@ -137,7 +153,11 @@ class GPT2SpellChecker:
         if verbose:
             print("best single score:", best_score_in_step)
         for beam in beams:
-            for c_i, (candidate, ed) in enumerate(candidates):
+            if beam["delay"] > 0:
+                beam["delay"] -= 1
+                new_beams.append(beam)
+                continue
+            for c_i, (candidate, ed, is_delayed) in enumerate(candidates):
                 encoded = encoded_candidates[c_i]
                 prob = beam["probs"][encoded[0]]
                 log_prob = torch.log(prob)
@@ -159,13 +179,14 @@ class GPT2SpellChecker:
                     "score": score,
                     "text": beam["text"] + candidate,
                     "past_key_values": beam["past_key_values"],
-                    "candidate": candidate
+                    "candidate": candidate,
+                    "delay": 1 if is_delayed else 0
                 }
                 new_beams.append(new_beam)
-            new_beams = sorted(new_beams, key=lambda beam: beam["score"])
-            new_beams = new_beams[:self.beam_width]
+            new_beams = self._select_top_beams(new_beams)
         if self.prune_beams:
-            new_beams = [b for b in new_beams if b["score"] < new_beams[0]["score"] + self.pruning_delta]
+            new_beams = [b for b in new_beams if b["delay"] > 0 or
+                         b["score"] < new_beams[0]["score"] + self.pruning_delta]
         beams = self._update_beams(new_beams)
         n_model_calls += len(beams)
         if verbose:
@@ -195,7 +216,11 @@ class GPT2SpellChecker:
             if token == " ":
                 is_space = True
             else:
-                beams = self._beam_search_step(beams, token, is_space, verbose)
+                if step + 2 < len(tokens) and tokens[step + 1] == " ":
+                    next_token = tokens[step + 2]
+                else:
+                    next_token = None
+                beams = self._beam_search_step(beams, token, next_token, is_space, verbose)
                 is_space = False
             step_runtime = time.time() - step_start_time
             if verbose:
