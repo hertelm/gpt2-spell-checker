@@ -42,8 +42,12 @@ def main(args):
     else:
         with open(config["input_file"]) as in_file:
             sequences = in_file.read().splitlines()
+        sequences = sequences[args.start:args.end]
         if config["output_file"] is not None:
-            out_file = open(config["output_file"], "w")
+            out_file_name = config["output_file"]
+            if args.start is not None:
+                out_file_name += f".{args.start}-{args.end}"
+            out_file = open(out_file_name, "w")
         else:
             out_file = None
         runtime = 0
@@ -68,5 +72,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("config_file", type=str, default="config.yml")
+    parser.add_argument("--start", type=int, default=None, optional=False)
+    parser.add_argument("--end", type=int, default=None, optional=False)
     args = parser.parse_args()
     main(args)
