@@ -137,7 +137,26 @@ class GPT2SpellChecker:
             else:
                 active_beams.append(beam)
         active_beams = sorted(active_beams, key=lambda beam: beam["score"])
+        delayed_beams = sorted(delayed_beams, key=lambda beam: beam["score"])
         return active_beams[:self.beam_width] + delayed_beams[:self.beam_width]
+
+    def _prune(self, beams):
+        active_scores = [np.inf]
+        delayed_scores = [np.inf]
+        for beam in beams:
+            score = beam["score"]
+            if beam["delay"] > 0:
+                delayed_scores.append(score)
+            else:
+                active_scores.append(score)
+        active_pruning_threshold = min(active_scores) + self.pruning_delta
+        delayed_pruning_threshold = min(delayed_scores) + self.pruning_delta
+        pruned_beams = []
+        for beam in beams:
+            if (beam["delay"] > 0 and beam["score"] < delayed_pruning_threshold) \
+                    or (beam["delay"] == 0 and beam["score"] < active_pruning_threshold):
+                pruned_beams.append(beam)
+        return pruned_beams
 
     def _beam_search_step(self, beams, token, next_token, is_space, verbose):
         n_model_calls = 0
@@ -183,17 +202,16 @@ class GPT2SpellChecker:
                     "delay": 1 if is_delayed else 0
                 }
                 new_beams.append(new_beam)
-            new_beams = self._select_top_beams(new_beams)
+        new_beams = self._select_top_beams(new_beams)
         if self.prune_beams:
-            new_beams = [b for b in new_beams if b["delay"] > 0 or
-                         b["score"] < new_beams[0]["score"] + self.pruning_delta]
+            new_beams = self._prune(new_beams)
         beams = self._update_beams(new_beams)
         n_model_calls += len(beams)
         if verbose:
             for beam in beams:
                 beam_score = beam["score"].item()
                 beam_text = beam["text"]
-                print(f"{beam_score:.4f} {beam_text}")
+                print(f"{beam_score:.4f} {beam_text} ({beam['delay']})")
             print(n_model_calls, "model calls")
         return beams
 
