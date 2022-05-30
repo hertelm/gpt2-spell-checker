@@ -81,6 +81,8 @@ class GPT2SpellChecker:
 
     def _update_beams(self, beams):
         for beam in beams:
+            if "probs" in beam:
+                continue
             inputs = self.tokenizer(beam["candidate"], return_tensors="pt")["input_ids"].to(self.device)
             with torch.no_grad():
                 output = self.model(inputs, past_key_values=beam["past_key_values"])
