@@ -167,12 +167,21 @@ class CandidateGenerator:
             merge_candidates.append((candidate, ed + 1, True))
         return merge_candidates
 
-    def get_candidates(self, token: str, next_token: Optional[str]):
+    def _get_candidates(self, token: str, next_token: Optional[str]) -> List[Tuple[str, int, bool]]:
         candidates = self._get_candidate_words(token, max_ed=self.max_ed)
         if self.allow_space_edits:
             candidates.extend(self._get_split_candidates(token, max_ed=self.max_ed_splits))
             if next_token is not None and next_token.isalpha():
                 candidates.extend(self._get_merge_candidates(token, next_token))
+        return candidates
+
+    def get_candidates(self, token: str, next_token: Optional[str]) -> List[Tuple[str, int, bool]]:
+        candidates = self._get_candidates(token, next_token)
+        if token[0].isupper() and len(token) == 1 or token[1:].islower():
+            lower_candidates = self._get_candidates(token.lower(), next_token)
+            lower_candidates = [(candidate[0].upper() + candidate[1:], ed, delay)
+                                for candidate, ed, delay in lower_candidates]
+            candidates = list(set(candidates).union(set(lower_candidates)))
         return candidates
 
     def is_word(self, word):
