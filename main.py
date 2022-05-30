@@ -33,7 +33,7 @@ def main(args):
                                      prune_beams=config["prune_beams"],
                                      pruning_delta=config["pruning_delta"])
 
-    if config["input_file"] is None:
+    if config["input_file"] == "None":
         while True:
             query = input("> ")
             result = spell_checker.correct(query, verbose=config["verbose"])
@@ -43,7 +43,7 @@ def main(args):
         with open(config["input_file"]) as in_file:
             sequences = in_file.read().splitlines()
         sequences = sequences[args.start:args.end]
-        if config["output_file"] is not None:
+        if config["output_file"] != "None":
             out_file_name = config["output_file"]
             if args.start is not None:
                 out_file_name += f".{args.start}-{args.end}"
@@ -71,8 +71,8 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("config_file", type=str, default="config.yml")
-    parser.add_argument("--start", type=int, default=None, required=False)
-    parser.add_argument("--end", type=int, default=None, required=False)
+    parser.add_argument("config_file", type=str, default="config.yml", nargs="?")
+    parser.add_argument("--start", default=None, required=False)
+    parser.add_argument("--end", default=None, required=False)
     args = parser.parse_args()
     main(args)

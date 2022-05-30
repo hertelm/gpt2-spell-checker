@@ -46,7 +46,7 @@ if __name__ == "__main__":
     ERROR_PROBABILITY = 0.1
 
     file = sys.argv[1] if len(sys.argv) > 1 else "data/bea60k.repaired/corrupt.txt"
-    
+
     with open(file) as f:
         lines = f.read().splitlines()
     for line in lines:
