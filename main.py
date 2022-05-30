@@ -42,7 +42,7 @@ def main(args):
     else:
         with open(config["input_file"]) as in_file:
             sequences = in_file.read().splitlines()
-        sequences = sequences[args.start:args.end]
+        sequences = sequences[args.start:(args.end if args.end is None else args.end + 1)]
         if config["output_file"] != "None":
             out_file_name = config["output_file"]
             if args.start is not None:
