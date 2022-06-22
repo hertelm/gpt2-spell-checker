@@ -179,9 +179,15 @@ class CandidateGenerator:
         candidates = self._get_candidates(token, next_token)
         if token[0].isupper() and len(token) == 1 or token[1:].islower():
             lower_candidates = self._get_candidates(token.lower(), next_token)
-            lower_candidates = [(candidate[0].upper() + candidate[1:], ed, delay)
-                                for candidate, ed, delay in lower_candidates]
-            candidates = list(set(candidates).union(set(lower_candidates)))
+            lower_cands_filtered = []
+            for candidate, ed, delay in lower_candidates:
+                upper_candidate = candidate[0].upper() + candidate[1:]
+                if self.is_word(upper_candidate):
+                    continue
+                if token == upper_candidate:
+                    continue
+                lower_cands_filtered.append((upper_candidate, ed, delay))
+            candidates = list(set(candidates).union(set(lower_cands_filtered)))
         return candidates
 
     def is_word(self, word):
