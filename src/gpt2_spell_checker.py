@@ -171,8 +171,8 @@ class GPT2SpellChecker:
         encoded_candidates = self._encode_candidates([candidate[0] for candidate in candidates])
         new_beams = []
         best_score_in_step = self._get_best_single_token_candidate_score(beams, token, candidates, encoded_candidates)
-        if verbose:
-            print("best single score:", best_score_in_step)
+        #if verbose:
+        #    print("best single score:", best_score_in_step)
         for beam in beams:
             if beam["delay"] > 0:
                 beam["delay"] -= 1
@@ -213,8 +213,9 @@ class GPT2SpellChecker:
             for beam in beams:
                 beam_score = beam["score"].item()
                 beam_text = beam["text"]
-                print(f"{beam_score:.4f} {beam_text} ({beam['delay']})")
-            print(n_model_calls, "model calls")
+                #print(f"{beam_score:.4f} {beam_text} ({beam['delay']})")
+                print(f"{beam_score:.4f} {beam_text}")
+            #print(n_model_calls, "model calls")
         return beams
 
     def correct(self, text, verbose=False):
@@ -227,10 +228,12 @@ class GPT2SpellChecker:
         beams = [beam]
 
         is_space = False
+        n_words_processed = 0
         for step, token in enumerate(tokens):
             is_real_word = self.candidate_generator.is_word(token)
-            if verbose:
-                print(f"== step {step + 1} ==")
+            if verbose and token != " ":
+                n_words_processed += 1
+                print(f"== step {n_words_processed} ==")
                 print(f"token: {token} (real word: {is_real_word})")
             step_start_time = time.time()
             if token == " ":
@@ -243,8 +246,8 @@ class GPT2SpellChecker:
                 beams = self._beam_search_step(beams, token, next_token, is_space, verbose)
                 is_space = False
             step_runtime = time.time() - step_start_time
-            if verbose:
-                print(f"{step_runtime:.4f} seconds")
+            #if verbose:
+            #    print(f"{step_runtime:.4f} seconds")
 
         if verbose:
             runtime = time.time() - start_time
