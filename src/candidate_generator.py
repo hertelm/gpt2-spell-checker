@@ -1,3 +1,5 @@
+import os.path
+import pickle
 from typing import Set, Dict, Tuple, List, Optional
 
 from itertools import combinations
@@ -66,7 +68,7 @@ class CandidateGenerator:
         self.max_ed = max_ed
         self.min_len_per_ed = min_len_per_ed
         self.stump_index = {}
-        self._create_stump_index()
+        self._load_or_create_stump_index()
         self.allow_space_edits = allow_space_edits
         self.max_ed_splits = max_ed_splits
 
@@ -102,6 +104,16 @@ class CandidateGenerator:
                     if stump not in self.stump_index:
                         self.stump_index[stump] = set()
                     self.stump_index[stump].add(word)
+
+    def _load_or_create_stump_index(self):
+        path = "data/word_stump_index.pkl"
+        if os.path.exists(path):
+            with open(path, "rb") as f:
+                self.stump_index = pickle.load(f)
+        else:
+            self._create_stump_index()
+            with open(path, "wb") as f:
+                pickle.dump(self.stump_index, f)
 
     def _query_stump_index(self, word) -> Set[str]:
         candidates = set()
